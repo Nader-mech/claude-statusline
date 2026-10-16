@@ -76,7 +76,15 @@ if ($cu -is [System.Management.Automation.PSCustomObject]) {
 $model = ''
 $mv = Field $j 'model', 'display_name'
 if ($null -ne $mv -and $mv -isnot [bool]) { $model = [string]$mv } elseif ($mv -eq $true) { $model = 'true' }
-$model = $model -replace '[\x00-\x1f\x7f-\x9f]', ''
+# Strip control, invisible and bidi characters, then cap at 120 characters (a surrogate pair
+# counts once, as in jq), like the bash version.
+$model = $model -replace '[\x00-\x1f\x7f-\x9f\u200b-\u200f\u2028-\u202e\u2066-\u2069\ufeff]', ''
+$cut = 0; $count = 0
+while ($cut -lt $model.Length -and $count -lt 120) {
+  if ([char]::IsHighSurrogate($model[$cut]) -and $cut + 1 -lt $model.Length) { $cut += 2 } else { $cut++ }
+  $count++
+}
+$model = $model.Substring(0, $cut)
 $live = ($null -ne $five) -or ($null -ne $week)
 
 # Cache the last known values so the bars show at session start, before the first reply.
@@ -86,7 +94,9 @@ if (-not $homeDir -or -not (Test-Path -LiteralPath $homeDir -PathType Container)
 $cache = Join-Path (Join-Path (Join-Path $homeDir '.claude') 'cache') 'statusline-usage.cache'
 $c5 = $null; $c5_at = $null; $cw = $null; $cw_at = $null
 $cached = $false; $five_c = $false; $week_c = $false
-if (Test-Path -LiteralPath $cache -PathType Leaf) {
+$ci = Get-Item -LiteralPath $cache -Force
+# Only a small regular file: a FIFO reports length 0 and would block the read forever.
+if ($ci -and -not $ci.PSIsContainer -and $ci.Length -gt 0 -and $ci.Length -le 4096) {
   try {
     $first = ([IO.File]::ReadAllText($cache, $utf8) -split "`n", 2)[0].Trim(" `t".ToCharArray())
     if ($first -ne '') {
@@ -111,8 +121,10 @@ if ($live -and -not (Test-Path -LiteralPath $cache -PathType Container) -and $ne
     if (-not (Test-Path -LiteralPath $dir -PathType Container)) { New-Item -ItemType Directory -Path $dir -Force -ErrorAction Stop | Out-Null }
     # temp files left by runs that were killed outright
     Get-ChildItem -LiteralPath $dir -Filter 'statusline-usage.cache.*' -File |
-      Where-Object { $_.Name -match '^statusline-usage\.cache\.[0-9]' } | Remove-Item -Force
-    [IO.File]::WriteAllText($tmp, "$new`n", $utf8)
+      Where-Object { $_.Name -cmatch '^statusline-usage\.cache\.[0-9]+$' } | Remove-Item -Force
+    # CreateNew: never write through a file or symlink someone planted at the temp path.
+    $fs = [IO.File]::Open($tmp, [IO.FileMode]::CreateNew, [IO.FileAccess]::Write)
+    try { $b = $utf8.GetBytes("$new`n"); $fs.Write($b, 0, $b.Length) } finally { $fs.Dispose() }
     Move-Item -LiteralPath $tmp -Destination $cache -Force -ErrorAction Stop
   } catch { Remove-Item -LiteralPath $tmp -Force }
 }

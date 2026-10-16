@@ -7,6 +7,7 @@ set -u
 cd "$(dirname "$0")/.."
 [ $# -ge 1 ] || { echo "usage: $0 \"<command>\" [\"<command>\" ...]" >&2; exit 2; }
 work=$(mktemp -d "${TMPDIR:-/tmp}/statusline-parity.XXXXXX")
+trap 'rm -rf -- "$work"' EXIT
 NOW=1800000000
 fail=0 count=0
 
@@ -48,6 +49,8 @@ add "corrupt cache"      "{$M}" "" "abc def ghi jkl"
 add "crlf cache"         "{$M}" "" "$(printf '30 %s 40 %s\r' $((NOW + 3600)) $((NOW + 500000)))"
 add "cache old format"   "{$M}" "" "40 $((NOW + 3600)) 20"
 add "leading zeros"      "{$M}" "" "08 $((NOW + 3600)) 09 $((NOW + 500000))"
+add "long model name"   "{\"model\":{\"display_name\":\"$(printf '%.0sé' $(seq 4000))\"},$(rl 30 3600 0 500000)}" 80 ""
+add "bidi and invisible" '{"model":{"display_name":"Op\u202eus\u200b 5\ufeff.5\u2066"}}' "" ""
 add "null current_usage" '{"context_window":{"used_percentage":12,"context_window_size":200000,"current_usage":null}}' "" ""
 
 run() { # $1 = command, $2 = case dir; prints the output bytes as hex so any difference shows
