@@ -35,9 +35,13 @@ jobs:
             tests/parity.sh "bash $root/statusline-usage.sh" \
               "powershell -NoProfile -ExecutionPolicy Bypass -File $win/statusline-usage.ps1" \
               "pwsh -NoProfile -File $win/statusline-usage.ps1"
-          else
+          elif [ "$RUNNER_OS" = macOS ]; then
+            # macOS's sh is bash 3.2 in POSIX mode, which the script also supports. (On Linux sh is
+            # usually dash, which can't run a bash script; Claude Code runs it via its #!/bin/bash.)
             tests/parity.sh "bash $root/statusline-usage.sh" "sh $root/statusline-usage.sh" \
               "pwsh -NoProfile -File $root/statusline-usage.ps1"
+          else
+            tests/parity.sh "bash $root/statusline-usage.sh" "pwsh -NoProfile -File $root/statusline-usage.ps1"
           fi
 
       - name: Installers
