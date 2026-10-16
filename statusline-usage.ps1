@@ -76,15 +76,18 @@ if ($cu -is [System.Management.Automation.PSCustomObject]) {
 $model = ''
 $mv = Field $j 'model', 'display_name'
 if ($null -ne $mv -and $mv -isnot [bool]) { $model = [string]$mv } elseif ($mv -eq $true) { $model = 'true' }
-# Strip control, invisible and bidi characters, then cap at 120 characters (a surrogate pair
-# counts once, as in jq), like the bash version.
-$model = $model -replace '[\x00-\x1f\x7f-\x9f\u200b-\u200f\u2028-\u202e\u2066-\u2069\ufeff]', ''
-$cut = 0; $count = 0
-while ($cut -lt $model.Length -and $count -lt 120) {
-  if ([char]::IsHighSurrogate($model[$cut]) -and $cut + 1 -lt $model.Length) { $cut += 2 } else { $cut++ }
-  $count++
+function Head([string]$s, [int]$n) { # the first $n characters, a surrogate pair counting once (as jq's .[0:n])
+  $cut = 0; $count = 0
+  while ($cut -lt $s.Length -and $count -lt $n) {
+    if ([char]::IsHighSurrogate($s[$cut]) -and $cut + 1 -lt $s.Length) { $cut += 2 } else { $cut++ }
+    $count++
+  }
+  return $s.Substring(0, $cut)
 }
-$model = $model.Substring(0, $cut)
+# Like the bash version: cut to 480, strip control, invisible and bidi characters, cap at 120.
+$model = Head $model 480
+$model = $model -replace '[\x00-\x1f\x7f-\x9f\u200b-\u200f\u2028-\u202e\u2066-\u2069\ufeff]', ''
+$model = Head $model 120
 $live = ($null -ne $five) -or ($null -ne $week)
 
 # Cache the last known values so the bars show at session start, before the first reply.
@@ -95,8 +98,10 @@ $cache = Join-Path (Join-Path (Join-Path $homeDir '.claude') 'cache') 'statuslin
 $c5 = $null; $c5_at = $null; $cw = $null; $cw_at = $null
 $cached = $false; $five_c = $false; $week_c = $false
 $ci = Get-Item -LiteralPath $cache -Force
-# Only a small regular file: a FIFO reports length 0 and would block the read forever.
-if ($ci -and -not $ci.PSIsContainer -and $ci.Length -gt 0 -and $ci.Length -le 4096) {
+# Only a small regular file: a FIFO reports length 0 and would block the read forever, and a
+# symlink reports its own size, not its target's. The scripts never create the cache as a link.
+$isLink = $ci -and ($ci.Attributes -band [IO.FileAttributes]::ReparsePoint)
+if ($ci -and -not $ci.PSIsContainer -and -not $isLink -and $ci.Length -gt 0 -and $ci.Length -le 4096) {
   try {
     $first = ([IO.File]::ReadAllText($cache, $utf8) -split "`n", 2)[0].Trim(" `t".ToCharArray())
     if ($first -ne '') {

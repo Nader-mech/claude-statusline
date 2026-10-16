@@ -14,7 +14,8 @@ now=${STATUSLINE_NOW:-${EPOCHSECONDS:-}}; num now; [ "$now" = - ] && now=$(date 
 cols=${COLUMNS:-}; num cols # terminal width, set by Claude Code; 0 or unset means unknown
 
 # One jq call: numbers are rounded to integers, anything else becomes "-". The model name loses
-# control, invisible and bidi characters and is capped at 120 characters, which also keeps the
+# control, invisible and bidi characters and is capped at 120 characters. It's cut to 480 first,
+# because gsub slows down badly on a long string with many matches; that cut also keeps the
 # width measuring below cheap.
 five= five_at= week= week_at= ctx= ctx_used= ctx_size= five10= week10= model=
 j=$(jq -r '
@@ -25,7 +26,7 @@ j=$(jq -r '
     n(.context_window.used_percentage), n(.context_window.context_window_size),
     n(.context_window.current_usage | .input_tokens + .cache_creation_input_tokens + .cache_read_input_tokens),
     n10(.rate_limits.five_hour.used_percentage), n10(.rate_limits.seven_day.used_percentage),
-    ((try .model.display_name catch null) // "" | tostring
+    ((try .model.display_name catch null) // "" | tostring | .[0:480]
       | gsub("[[:cntrl:]\u200b-\u200f\u2028-\u202e\u2066-\u2069\ufeff]"; "") | .[0:120]) ] | join("\t")
 ' 2>/dev/null <<<"$input")
 IFS=$'\t' read -r five five_at week week_at ctx ctx_size ctx_used five10 week10 model <<<"$j"
@@ -47,7 +48,7 @@ if [ -n "$live" ] && [ ! -d "$cache" ] && [ "$new" != "$c5 $c5_at $cw $cw_at" ];
   trap 'rm -f "$tmp" 2>/dev/null; exit 1' INT TERM HUP # Claude Code cancels a run when a newer one starts
   { [ -d "${cache%/*}" ] || mkdir -p "${cache%/*}"
     for f in "$cache".[0-9]*; do # temp files left by runs that were killed outright
-      case ${f##*.} in *[!0-9]*) ;; *) rm -f "$f" ;; esac
+      case ${f#"$cache".} in ''|*[!0-9]*) ;; *) rm -f "$f" ;; esac
     done
     # noclobber: never write through a file or symlink someone planted at the temp path.
     ( umask 077; set -C; printf '%s\n' "$new" > "$tmp" ) && mv -f "$tmp" "$cache"; } 2>/dev/null \

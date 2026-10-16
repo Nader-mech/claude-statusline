@@ -46,7 +46,6 @@ $statusLine = [PSCustomObject]@{ type = 'command'; command = $command; refreshIn
 $json | Add-Member -NotePropertyName statusLine -NotePropertyValue $statusLine -Force
 
 # Each run keeps its own timestamped backup, so a second run never overwrites the first.
-# Write the new settings to a temp file and only replace the original once that worked.
 $backup = $null
 if ($hadSettings) {
   # Invariant culture: some regions default to a non-Gregorian calendar (e.g. year 1448).
@@ -55,9 +54,15 @@ if ($hadSettings) {
   while (Test-Path -LiteralPath $backup) { $backup = "$settings.bak.$stamp.$n"; $n++ }
   Copy-Item -LiteralPath $settings -Destination $backup
 }
-$tmp = "$settings.$PID.tmp"
-[IO.File]::WriteAllText($tmp, ($json | ConvertTo-Json -Depth 100), $utf8)
-Move-Item -LiteralPath $tmp -Destination $settings -Force
+# Build the new text first, then write it into the existing file once the backup is safe. Writing
+# in place keeps a symlinked settings.json linked and keeps the file's permissions.
+$content = $json | ConvertTo-Json -Depth 100
+if (-not $content) { Write-Error 'Building the new settings failed; nothing was changed.'; exit 1 }
+$isNew = -not (Test-Path -LiteralPath $settings)
+[IO.File]::WriteAllText($settings, $content, $utf8)
+if ($isNew -and -not $IsWindows -and $PSVersionTable.PSVersion.Major -ge 7) {
+  try { [IO.File]::SetUnixFileMode($settings, [IO.UnixFileMode]'UserRead, UserWrite') } catch { }
+}
 
 if ($backup) {
   Write-Output "Installed. Old settings saved to $backup"
