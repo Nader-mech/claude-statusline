@@ -10,7 +10,7 @@ num() { # $1 = variable name; leaves a plain integer in it, or "-" for anything 
   case $v in ''|*[!0-9]*) v=- ;; *) [ ${#v} -le 12 ] && v=$((10#$v)) || v=- ;; esac
   printf -v "$1" %s "$v"
 }
-now=${EPOCHSECONDS:-}; num now; [ "$now" = - ] && now=$(date +%s)
+now=${STATUSLINE_NOW:-${EPOCHSECONDS:-}}; num now; [ "$now" = - ] && now=$(date +%s) # STATUSLINE_NOW pins the clock for tests
 cols=${COLUMNS:-}; num cols # terminal width, set by Claude Code; 0 or unset means unknown
 
 # One jq call: numbers are rounded to integers, anything else becomes "-",
@@ -158,4 +158,7 @@ fit() { # $1 = build1 or build2; sets $line at the most detailed level that fits
 
 fit build1; line1=$line
 fit build2; line2=$line
-printf '%s' "${line1}${line1:+${line2:+$'\n'}}${line2}"
+# A spacer row between the two lines. It holds a reset code, because Claude Code may drop a
+# row that is completely empty.
+spacer=$'\n\033[0m\n'
+printf '%s' "${line1}${line1:+${line2:+$spacer}}${line2}"

@@ -1,0 +1,58 @@
+name: test
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  parity:
+    name: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Tool versions
+        run: |
+          bash --version | head -1
+          jq --version
+          pwsh -NoProfile -Command '$PSVersionTable.PSVersion.ToString()'
+          if [ "$RUNNER_OS" = Windows ]; then powershell -NoProfile -Command '$PSVersionTable.PSVersion.ToString()'; fi
+
+      # Every implementation must print byte-identical output for the same input, clock, width
+      # and cache. On Windows that covers Git Bash, Windows PowerShell 5.1 and PowerShell 7.
+      - name: Parity
+        run: |
+          root=$PWD
+          if [ "$RUNNER_OS" = Windows ]; then
+            win=$(cygpath -m "$root")
+            tests/parity.sh "bash $root/statusline-usage.sh" \
+              "powershell -NoProfile -ExecutionPolicy Bypass -File $win/statusline-usage.ps1" \
+              "pwsh -NoProfile -File $win/statusline-usage.ps1"
+          else
+            tests/parity.sh "bash $root/statusline-usage.sh" "sh $root/statusline-usage.sh" \
+              "pwsh -NoProfile -File $root/statusline-usage.ps1"
+          fi
+
+      - name: Installers
+        run: |
+          home=$(mktemp -d)
+          mkdir -p "$home/.claude" && echo '{"tui":"fullscreen"}' > "$home/.claude/settings.json"
+          if [ "$RUNNER_OS" = Windows ]; then
+            whome=$(cygpath -m "$home")
+            USERPROFILE="$whome" HOME="$whome" powershell -NoProfile -ExecutionPolicy Bypass -File install.ps1
+          else
+            HOME="$home" ./install.sh
+          fi
+          jq -e '.tui == "fullscreen" and .statusLine.refreshInterval == 10' "$home/.claude/settings.json"
+          cmd=$(jq -r .statusLine.command "$home/.claude/settings.json")
+          echo "command: $cmd"
+          out=$(echo '{"model":{"display_name":"Opus 5.5"}}' | HOME="$home" USERPROFILE="$home" bash -c "$cmd")
+          echo "output: $out"
+          case $out in *"Opus 5.5"*) ;; *) echo "installed command printed the wrong thing"; exit 1 ;; esac
