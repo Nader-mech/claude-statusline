@@ -1,17 +1,30 @@
 # claude-statusline
 
-A Claude Code status line that shows how much of your subscription you've used, for the 5-hour window and the 7-day week.
+A two-line Claude Code status line: your context window on top, your subscription limits underneath.
 
 ```
-5h ████░░░░░░ 42% resets in 4h 45m  ·  week ████████░░ 81% resets in 6d 22h 35m  · Opus 5.5
+◆ Opus 5.5   context ███░░░░░░░░░░░░░░░░░ 15%   154k used · 846k free
+⏱ 5h ███▌░░░░░░ 35% ↻ 2h 30m  │  week ████▊░░░░░ 48% ↻ 2d 21h 27m
 ```
 
-- Green under 50%, yellow under 80%, red from 80%
-- Shows how long until each window resets (`1d 2h 3m`, zero units dropped: `6d`, `1d 2m`)
-- Remembers the last values, so the bars show as soon as a session starts (tagged `(last known)` until fresh data arrives). A cached window disappears once its reset time has passed.
-- One bash file, one dependency (`jq`), about 10 ms per refresh
+When your pace would hit a limit before it resets, that window turns red and says when:
 
-Usage data comes from the `rate_limits` field Claude Code passes to status line scripts, which is only there on Pro and Max plans. With an API key you'll see just the model name.
+```
+⏱ 5h ███████▋░░ 76% ↻ 3h 10m  ⚠ runs out in 35m  │  week ██████░░░░ 60% ↻ 3d 11h 20m
+```
+
+## What it shows
+
+- **Context**: how full this conversation's context window is, with tokens used and free
+- **5-hour and weekly limits**: a bar, the percent used, and a countdown to the reset (`↻ 1d 2h 3m`)
+- **Run-out warning**: compares how much you've used with how much of the window has passed. If you'd hit 100% before the reset, it shows `⚠ runs out in …`. It stays quiet for the first 5% of a window, where the pace is mostly noise.
+- **Colours**: green under 50%, yellow under 80%, red from 80%. Bars fill in 1/8-cell steps on a dim track, so 1% is a sliver and 0% is clearly empty.
+- **Fits your terminal**: each line steps down through four layouts (wide, compact, tight, minimal) until it fits the width. Nothing overflows from 54 columns up.
+- **Instant at session start**: the last known limits are cached, so they show before your first reply, marked with `~` (e.g. `~week 60%`). A cached window disappears once its reset time passes.
+
+Usage limits come from the `rate_limits` field Claude Code passes to status line scripts, which is only there on Pro and Max plans. With an API key you get line 1 only.
+
+One bash file, one dependency (`jq`), about 10 ms per refresh. Every value from Claude Code or the cache is checked to be a plain number before use.
 
 ## Install
 
@@ -46,8 +59,8 @@ Start a new Claude Code session to see it.
 
 | Platform | Status |
 |---|---|
-| macOS (bash 3.2, BSD date) | tested |
-| Linux (bash 5, GNU date) | tested |
+| macOS (bash 3.2, `sh`) | tested |
+| bash 5.3 with GNU coreutils (as on Linux) | tested |
 | WSL | same as Linux |
 | Windows, Git Bash | expected to work, not tested on a real machine |
 
