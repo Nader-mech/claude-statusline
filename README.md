@@ -3,11 +3,11 @@
 A Claude Code status line that shows how much of your subscription you've used, for the 5-hour window and the 7-day week.
 
 ```
-5h ████░░░░░░ 42% resets 12:40  ·  week ████████░░ 81% resets Sat 11:40  · Opus 5.5
+5h ████░░░░░░ 42% resets in 4h 45m  ·  week ████████░░ 81% resets in 6d 22h 35m  · Opus 5.5
 ```
 
 - Green under 50%, yellow under 80%, red from 80%
-- Shows the time each window resets
+- Shows how long until each window resets (`1d 2h 3m`, zero units dropped: `6d`, `1d 2m`)
 - Remembers the last values, so the bars show as soon as a session starts (tagged `(last known)` until fresh data arrives). A cached window disappears once its reset time has passed.
 - One bash file, one dependency (`jq`), about 10 ms per refresh
 
@@ -35,8 +35,10 @@ cd claude-statusline
 `install.sh` copies the script to `~/.claude/` and adds this to `~/.claude/settings.json` (your old settings are saved to `settings.json.bak`):
 
 ```json
-"statusLine": { "type": "command", "command": "bash ~/.claude/statusline-usage.sh" }
+"statusLine": { "type": "command", "command": "bash ~/.claude/statusline-usage.sh", "refreshInterval": 10 }
 ```
+
+`refreshInterval` redraws the line every 10 seconds so the countdown keeps moving while you're idle. It needs Claude Code 2.1.97 or later; on older versions, drop it and the line updates after each reply.
 
 Start a new Claude Code session to see it.
 

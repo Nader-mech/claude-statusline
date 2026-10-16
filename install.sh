@@ -13,7 +13,8 @@ chmod +x "$dir/statusline-usage.sh"
 
 [ -f "$settings" ] || echo '{}' > "$settings"
 cp "$settings" "$settings.bak"
-jq '.statusLine = {"type": "command", "command": "bash ~/.claude/statusline-usage.sh"}' "$settings.bak" > "$settings"
+# refreshInterval redraws every 10 s so the countdown stays current while idle (Claude Code 2.1.97+).
+jq '.statusLine = {"type": "command", "command": "bash ~/.claude/statusline-usage.sh", "refreshInterval": 10}' "$settings.bak" > "$settings"
 
 echo "Installed. Old settings saved to $settings.bak"
 echo "Start a new Claude Code session to see the status line."

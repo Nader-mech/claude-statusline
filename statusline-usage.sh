@@ -4,8 +4,6 @@
 input=$(cat)
 cache="$HOME/.claude/cache/statusline-usage.cache"
 dim=$'\033[2m' reset=$'\033[0m'
-(( BASH_VERSINFO[0] * 100 + BASH_VERSINFO[1] >= 402 )) && printf_time=1
-export LC_TIME=C # same day names from printf and date, whatever the system region
 
 num() { # $1 = variable name; leaves a plain integer in it, or "-" for anything else
   local v=${!1}
@@ -44,21 +42,22 @@ if [ -n "$live" ] && [ ! -d "$cache" ] && [ "$new" != "$c5 $c5_at $cw $cw_at" ];
 fi
 
 out=""
-seg() { # $1 = label, $2 = percent, $3 = resets_at, $4 = time format
+seg() { # $1 = label, $2 = percent, $3 = resets_at
   [ "$2" = - ] && return
-  local p=$2 filled=$(( ($2 + 5) / 10 )) bar="" i c=$'\033[32m' when=""
+  local p=$2 filled=$(( ($2 + 5) / 10 )) bar="" i c=$'\033[32m' when="" m d h
   [ $filled -gt 10 ] && filled=10
   for ((i = 0; i < 10; i++)); do [ $i -lt $filled ] && bar+="█" || bar+="░"; done
   [ $p -ge 50 ] && c=$'\033[33m'; [ $p -ge 80 ] && c=$'\033[31m' # green under 50, yellow under 80, red above
-  if [ "$3" != - ]; then
-    if [ -n "$printf_time" ]; then printf -v when "%($4)T" "$3" 2>/dev/null
-    else when=$(date -d "@$3" "+$4" 2>/dev/null || date -r "$3" "+$4" 2>/dev/null) # GNU first: on GNU, -r means a file
-    fi
+  if [ "$3" != - ] && [ "$3" -gt "$now" ]; then # time left, e.g. "1d 2h 3m"; zero units dropped, minutes rounded up
+    m=$(( ($3 - now + 59) / 60 )); d=$(( m / 1440 )); h=$(( m % 1440 / 60 )); m=$(( m % 60 ))
+    [ $d -gt 0 ] && when="${d}d"
+    [ $h -gt 0 ] && when+="${when:+ }${h}h"
+    [ $m -gt 0 ] && when+="${when:+ }${m}m"
   fi
-  out+="${out:+  ·  }$c$1 $bar $p%$reset${when:+$dim resets $when$reset}"
+  out+="${out:+  ·  }$c$1 $bar $p%$reset${when:+$dim resets in $when$reset}"
 }
-seg "5h" "$five" "$five_at" "%H:%M"
-seg "week" "$week" "$week_at" "%a %H:%M"
+seg "5h" "$five" "$five_at"
+seg "week" "$week" "$week_at"
 
 [ -n "$cached" ] && out+="  $dim(last known)$reset"
 [ -n "$model" ] && out+="${out:+  }$dim${out:+· }$model$reset"
